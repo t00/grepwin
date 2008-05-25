@@ -41,9 +41,9 @@
 #include <algorithm>
 #include <Commdlg.h>
 
-#include <boost/regex.hpp>
-#include <boost/spirit/iterator/file_iterator.hpp>
-using namespace boost;
+#include <cctype>
+#include <regex>
+
 using namespace std;
 
 DWORD WINAPI SearchThreadEntry(LPVOID lpParam);
@@ -486,7 +486,7 @@ LRESULT CSearchDlg::DoCommand(int id, int msg)
 					{
 						try
 						{
-							wregex expression = wregex(buf);
+							tr1::wregex expression = tr1::wregex(buf);
 						}
 						catch (const exception&)
 						{
@@ -910,7 +910,7 @@ bool CSearchDlg::SaveSettings()
 		wstring s = wstring(pBuf, pos);
 		if (!s.empty())
 		{
-			std::transform(s.begin(), s.end(), s.begin(), (int(*)(int)) std::tolower);
+			std::transform(s.begin(), s.end(), s.begin(), std::tolower);
 			m_patterns.push_back(s);
 		}
 		pBuf += pos;
@@ -928,7 +928,7 @@ bool CSearchDlg::SaveSettings()
 		bool bValid = true;
 		try
 		{
-			wregex expression = wregex(m_searchString);
+			tr1::wregex expression = tr1::wregex(m_searchString);
 		}
 		catch (const exception&)
 		{
@@ -944,7 +944,7 @@ bool CSearchDlg::SaveSettings()
 		bool bValid = true;
 		try
 		{
-			wregex expression = wregex(m_patternregex);
+			tr1::wregex expression = tr1::wregex(m_patternregex);
 		}
 		catch (const exception&)
 		{
@@ -1165,9 +1165,10 @@ DWORD CSearchDlg::SearchThread()
 					{
 						try
 						{
-							wregex expression = wregex(m_patternregex, regex::normal|regbase::icase);
-							wcmatch whatc;
-							if (regex_match(pName, whatc, expression))
+							const tr1::wregex expression(m_patternregex, tr1::regex_constants::icase | tr1::regex_constants::ECMAScript);
+							tr1::wsmatch match;
+							wstring rmatch = pName;
+							if (tr1::regex_match(rmatch, match, expression))
 							{
 								bPattern = true;
 							}
@@ -1182,7 +1183,7 @@ DWORD CSearchDlg::SearchThread()
 						if (m_patterns.size())
 						{
 							wstring fname = pName;
-							std::transform(fname.begin(), fname.end(), fname.begin(), (int(*)(int)) std::tolower);
+							std::transform(fname.begin(), fname.end(), fname.begin(), std::tolower);
 
 							for (vector<wstring>::const_iterator it = m_patterns.begin(); it != m_patterns.end(); ++it)
 								bPattern = bPattern || wcswildcmp(it->c_str(), fname.c_str());
@@ -1232,121 +1233,61 @@ DWORD CSearchDlg::SearchThread()
 int CSearchDlg::SearchFile(CSearchInfo& sinfo, bool bIncludeBinary, bool bUseRegex, bool bCaseSensitive, const wstring& searchString)
 {
 	int nFound = 0;
-	// we keep it simple:
-	// files bigger than 30MB are considered binary. Binary files are searched
-	// as if they're ANSI text files.
 	wstring localSearchString = searchString;
 	if (!bUseRegex)
 		localSearchString = _T("\\Q") + searchString + _T("\\E");
-	if (sinfo.filesize < 30*1024*1024)
+
+	CTextFile textfile;
+
+	CTextFile::UnicodeType type = CTextFile::AUTOTYPE;
+	if (textfile.Load(sinfo.filepath.c_str(), type))
 	{
-		CTextFile textfile;
-
-		CTextFile::UnicodeType type = CTextFile::AUTOTYPE;
-		if (textfile.Load(sinfo.filepath.c_str(), type))
+		sinfo.encoding = type;
+		if ((type != CTextFile::BINARY)||(bIncludeBinary))
 		{
-			sinfo.encoding = type;
-			if ((type != CTextFile::BINARY)||(bIncludeBinary))
-			{
-				wstring::const_iterator start, end;
-				start = textfile.GetFileString().begin();
-				end = textfile.GetFileString().end();
-				match_results<wstring::const_iterator> what;
-				try
-				{
-					int ft = regex::normal;
-					if (!bCaseSensitive)
-						ft |= regbase::icase;
-					wregex expression = wregex(localSearchString, ft);
-					match_results<wstring::const_iterator> whatc;
-					if ((m_replaceString.empty())&&(!m_bReplace))
-					{
-						match_flag_type flags = match_default | match_not_dot_newline;
-						while (regex_search(start, end, whatc, expression, flags))   
-						{
-							if (whatc[0].matched)
-							{
-								nFound++;
-								sinfo.matchstarts.push_back(whatc[0].first-textfile.GetFileString().begin());
-								sinfo.matchends.push_back(whatc[0].second-textfile.GetFileString().begin());
-							}
-							// update search position:
-							if (start == whatc[0].second)
-							{
-								if (start == end)
-									break;
-								start++;
-							}
-							else
-								start = whatc[0].second;
-							// update flags:
-							flags |= match_prev_avail;
-							flags |= match_not_bob;
-						}
-					}
-					else
-					{
-						match_flag_type flags = match_default | format_all | match_not_dot_newline;
-						wstring replaced = regex_replace(textfile.GetFileString(), expression, m_replaceString, flags);
-						if (replaced.compare(textfile.GetFileString()))
-						{
-							nFound++;
-							sinfo.matchstarts.push_back(0);
-							sinfo.matchends.push_back(0);
-							textfile.SetFileContent(replaced);
-							if (m_bCreateBackup)
-							{
-								wstring backupfile = sinfo.filepath + _T(".bak");
-								CopyFile(sinfo.filepath.c_str(), backupfile.c_str(), FALSE);
-							}
-							textfile.Save(sinfo.filepath.c_str());
-						}
-					}
-				}
-				catch (const exception&)
-				{
-					return -1;
-				}
-			}
-		}
-		else
-			return -1;
-	}
-	else
-	{
-		// assume binary file
-		if (bIncludeBinary)
-		{
-			sinfo.encoding = CTextFile::BINARY;
-			string filepath = CUnicodeUtils::StdGetANSI(sinfo.filepath);
-			string searchfor = CUnicodeUtils::StdGetUTF8(searchString);
-
-			if (!bUseRegex)
-			{
-				searchfor = "\\Q";
-				searchfor += CUnicodeUtils::StdGetUTF8(searchString);
-				searchfor += "\\E";
-			}
-			spirit::file_iterator<> start(filepath.c_str());
-			spirit::file_iterator<> fbeg = start;
-			spirit::file_iterator<> end = start.make_end();
-
-			match_results<string::const_iterator> what;
-			match_flag_type flags = match_default | match_not_dot_newline;
+			wstring::const_iterator start, end;
+			start = textfile.GetFileString().begin();
+			end = textfile.GetFileString().end();
 			try
 			{
-				regex expression = regex(searchfor);
-				match_results<spirit::file_iterator<>> whatc;
-				while (regex_search(start, end, whatc, expression, flags))   
+				tr1::regex_constants::syntax_option_type ft = tr1::regex_constants::basic | tr1::regex_constants::optimize;
+				if (!bCaseSensitive)
+					ft |= tr1::regex_constants::icase;
+				const tr1::wregex expression(localSearchString, ft);
+
+				if ((m_replaceString.empty())&&(!m_bReplace))
 				{
-					nFound++;
-					sinfo.matchstarts.push_back(whatc[0].first-fbeg);
-					sinfo.matchends.push_back(whatc[0].second-fbeg);
-					// update search position:
-					start = whatc[0].second;
-					// update flags:
-					flags |= match_prev_avail;
-					flags |= match_not_bob;
+					const tr1::wsregex_iterator endregex;
+					tr1::regex_constants::match_flag_type flags = tr1::regex_constants::match_default | tr1::regex_constants::match_not_eol;
+					for (tr1::wsregex_iterator it(start, end, expression, flags); it != endregex; ++it)
+					{
+						wstring matchedString = (*it)[0];
+						if (!matchedString.empty())
+						{
+							nFound++;
+							sinfo.matchstarts.push_back(it->_At(0).first-textfile.GetFileString().begin());
+							sinfo.matchends.push_back(it->_At(0).second-textfile.GetFileString().begin());
+						}
+					}
+				}
+				else
+				{
+					tr1::regex_constants::match_flag_type flags = tr1::regex_constants::match_default | tr1::regex_constants::match_not_eol;
+					wstring replaced = tr1::regex_replace(textfile.GetFileString(), expression, m_replaceString, flags);
+
+					if (replaced.compare(textfile.GetFileString()))
+					{
+						nFound++;
+						sinfo.matchstarts.push_back(0);
+						sinfo.matchends.push_back(0);
+						textfile.SetFileContent(replaced);
+						if (m_bCreateBackup)
+						{
+							wstring backupfile = sinfo.filepath + _T(".bak");
+							CopyFile(sinfo.filepath.c_str(), backupfile.c_str(), FALSE);
+						}
+						textfile.Save(sinfo.filepath.c_str());
+					}
 				}
 			}
 			catch (const exception&)
@@ -1355,6 +1296,8 @@ int CSearchDlg::SearchFile(CSearchInfo& sinfo, bool bIncludeBinary, bool bUseReg
 			}
 		}
 	}
+	else
+		return -1;
 
 	return nFound;
 }
