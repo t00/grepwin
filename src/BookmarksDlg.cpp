@@ -21,8 +21,8 @@
 #include "BookmarksDlg.h"
 #include <string>
 
-#include <boost/regex.hpp>
-using namespace boost;
+#include <regex>
+
 using namespace std;
 
 

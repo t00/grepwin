@@ -21,8 +21,8 @@
 #include "RegexTestDlg.h"
 #include <string>
 
-#include <boost/regex.hpp>
-using namespace boost;
+#include <regex>
+
 using namespace std;
 
 
@@ -166,41 +166,24 @@ void CRegexTestDlg::DoRegex()
 		wstring replaceresult;
 		if (!m_searchText.empty())
 		{
-			wstring::const_iterator start, end;
-			start = m_textContent.begin();
-			end = m_textContent.end();
-			match_results<wstring::const_iterator> what;
 			try
 			{
-				wregex expression = wregex(m_searchText);
-				match_results<wstring::const_iterator> whatc;
-				match_flag_type flags = match_default;
-				while (regex_search(start, end, whatc, expression, flags))   
+				const tr1::wregex expression(m_searchText);
+				const tr1::wsregex_iterator endregex;
+				for (tr1::wsregex_iterator it(m_textContent.begin(), m_textContent.end(), expression); it != endregex; ++it)
 				{
+					// (*it)[0] is the matched string
+					wstring matchedString = (*it)[0];
 					if (!searchresult.empty())
 						searchresult = searchresult + _T("\r\n----------------------------\r\n");
-					wstring c(whatc[0].first, whatc[0].second);
-					searchresult = searchresult + c;
+					searchresult = searchresult + matchedString;
 					if (!m_searchText.empty())
 					{
-						match_flag_type rflags = match_default|format_all;
-						wstring replaced = regex_replace(c, expression, m_replaceText, rflags);
+						wstring replaced = tr1::regex_replace(matchedString, expression, m_replaceText);
 						if (!replaceresult.empty())
 							replaceresult = replaceresult + _T("\r\n----------------------------\r\n");
 						replaceresult = replaceresult + replaced;
 					}
-					// update search position:
-					if (start == whatc[0].second)
-					{
-						if (start == end)
-							break;
-						start++;
-					}
-					else
-						start = whatc[0].second;
-					// update flags:
-					flags |= match_prev_avail;
-					flags |= match_not_bob;
 				}
 			}
 			catch (const exception&)
