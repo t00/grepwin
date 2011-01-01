@@ -9,3 +9,13 @@
 || /filemaskregex:"regex" || sets the file mask as a regex ||
 || /filemaskexclude:"string" || sets the exclude file mask ||
 || /execute || if specified, the search is started immediately without the user having to click the search button first ||
+|| /i:[yes|no] || case insensitive ||
+|| /n:[yes|no] || dot matches newline ||
+|| /k:[yes|no] || create backups ||
+|| /utf8:[yes|no] || treat files as utf8 ||
+|| /size:sizelimit || sets the file size limit. Pass -1 to use all sizes ||
+|| /sizecmp:[0|1|2] || compare setting for the size limit: 0 = less than, 1 = equal to, 2 = greater than ||
+|| /s:[yes|no] || include system items ||
+|| /h:[yes|no] || include hidden items ||
+|| /u:[yes|no] || include subfolders ||
+|| /b:[yes|no] || include binary files ||
