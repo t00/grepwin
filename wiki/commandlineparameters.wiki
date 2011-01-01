@@ -1,0 +1,11 @@
+#summary command line parameters for grepWin
+
+= Command line parameters for grepWin =
+
+|| *parameter* || *description* ||
+|| /help, /?, /about || shows the about dialog ||
+|| /searchpath:"path" || sets the path to search in ||
+|| /searchfor:"regex" || fills the regex to search with ||
+|| /filemaskregex:"regex" || sets the file mask as a regex ||
+|| /filemaskexclude:"string" || sets the exclude file mask ||
+|| /execute || if specified, the search is started immediately without the user having to click the search button first ||
