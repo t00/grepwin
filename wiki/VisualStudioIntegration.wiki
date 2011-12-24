@@ -1,4 +1,5 @@
 #summary Tip on how to integrate grepWin with Visual Studio
+#labels Featured
 
 = Integrating grepWin into Visual Studio =
 
