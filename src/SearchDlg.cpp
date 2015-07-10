@@ -1668,7 +1668,7 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
                 if (ListView_GetItem(hListControl, &lv))
                 {
                     std::wstring appname = application;
-                    std::transform(appname.begin(), appname.end(), appname.begin(), ::tolower);
+                    std::transform(appname.begin(), appname.end(), appname.begin(), std::tolower);
 
                     // now find out if the application which opens the file is known to us
                     // and if it has a 'linenumber' switch to jump directly to a specific
@@ -1784,7 +1784,6 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
     {
         bool filelist = (IsDlgButtonChecked(*this, IDC_RESULTFILES) == BST_CHECKED);
         m_bAscending = !m_bAscending;
-        bool bDidSort = false;
         switch (lpNMItemActivate->iSubItem)
         {
         case 0:
@@ -1792,7 +1791,6 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
                 sort(m_items.begin(), m_items.end(), NameCompareAsc);
             else
                 sort(m_items.begin(), m_items.end(), NameCompareDesc);
-            bDidSort = true;
             break;
         case 1:
             if (filelist)
@@ -1801,7 +1799,6 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
                     sort(m_items.begin(), m_items.end(), SizeCompareAsc);
                 else
                     sort(m_items.begin(), m_items.end(), SizeCompareDesc);
-                bDidSort = true;
             }
             break;
         case 2:
@@ -1811,7 +1808,6 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
                     sort(m_items.begin(), m_items.end(), MatchesCompareAsc);
                 else
                     sort(m_items.begin(), m_items.end(), MatchesCompareDesc);
-                bDidSort = true;
             }
             break;
         case 3:
@@ -1819,21 +1815,18 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
                 sort(m_items.begin(), m_items.end(), PathCompareAsc);
             else
                 sort(m_items.begin(), m_items.end(), PathCompareDesc);
-            bDidSort = true;
             break;
         case 4:
             if (m_bAscending)
                 sort(m_items.begin(), m_items.end(), EncodingCompareAsc);
             else
                 sort(m_items.begin(), m_items.end(), EncodingCompareDesc);
-            bDidSort = true;
             break;
         case 5:
             if (m_bAscending)
                 sort(m_items.begin(), m_items.end(), ModifiedTimeCompareAsc);
             else
                 sort(m_items.begin(), m_items.end(), ModifiedTimeCompareDesc);
-            bDidSort = true;
             break;
         }
 
@@ -1857,12 +1850,9 @@ void CSearchDlg::DoListNotify(LPNMITEMACTIVATE lpNMItemActivate)
             hd.fmt &= ~(HDF_SORTDOWN | HDF_SORTUP);
             Header_SetItem(hHeader, i, &hd);
         }
-        if (bDidSort)
-        {
-            Header_GetItem(hHeader, lpNMItemActivate->iSubItem, &hd);
-            hd.fmt |= (m_bAscending ? HDF_SORTUP : HDF_SORTDOWN);
-            Header_SetItem(hHeader, lpNMItemActivate->iSubItem, &hd);
-        }
+        Header_GetItem(hHeader, lpNMItemActivate->iSubItem, &hd);
+        hd.fmt |= (m_bAscending ? HDF_SORTUP : HDF_SORTDOWN);
+        Header_SetItem(hHeader, lpNMItemActivate->iSubItem, &hd);
         SendMessage(hListControl, WM_SETREDRAW, TRUE, 0);
         RedrawWindow(hListControl, NULL, NULL, RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
     }
@@ -2066,7 +2056,7 @@ bool CSearchDlg::SizeCompareAsc(const CSearchInfo &Entry1, const CSearchInfo& En
 
 bool CSearchDlg::MatchesCompareAsc(const CSearchInfo &Entry1, const CSearchInfo& Entry2)
 {
-    return Entry1.matchcount < Entry2.matchcount;
+    return Entry1.matchlinesnumbers.size() < Entry2.matchlinesnumbers.size();
 }
 
 bool CSearchDlg::PathCompareAsc(const CSearchInfo &Entry1, const CSearchInfo& Entry2)
@@ -2456,15 +2446,15 @@ int CSearchDlg::SearchFile(CSearchInfo& sinfo, bool bSearchAlways, bool bInclude
                 flags &= ~boost::match_not_bob;
                 RegexReplaceFormatter replaceFmt(m_replaceString);
                 replaceFmt.SetReplacePair(L"${filepath}", sinfo.filepath);
-                std::wstring filenamefullW = sinfo.filepath.substr(sinfo.filepath.find_last_of('\\')+1);
-                auto dotposW = filenamefullW.find_last_of('.');
-                if (dotposW != std::string::npos)
+                std::wstring filenamefull = sinfo.filepath.substr(sinfo.filepath.find_last_of('\\')+1);
+                auto dotpos = filenamefull.find_last_of('.');
+                if (dotpos != std::string::npos)
                 {
-                    std::wstring filename = filenamefullW.substr(0, dotposW);
+                    std::wstring filename = filenamefull.substr(0, dotpos);
                     replaceFmt.SetReplacePair(L"${filename}", filename);
-                    if (filenamefullW.size() > dotposW)
+                    if (filenamefull.size() > dotpos)
                     {
-                        std::wstring fileext = filenamefullW.substr(dotposW+1);
+                        std::wstring fileext = filenamefull.substr(dotpos+1);
                         replaceFmt.SetReplacePair(L"${fileext}", fileext);
                     }
                 }
@@ -2646,15 +2636,15 @@ int CSearchDlg::SearchFile(CSearchInfo& sinfo, bool bSearchAlways, bool bInclude
                         flags &= ~boost::match_not_bob;
                         RegexReplaceFormatterA replaceFmt(CUnicodeUtils::StdGetUTF8(m_replaceString));
                         replaceFmt.SetReplacePair("${filepath}", CUnicodeUtils::StdGetUTF8(sinfo.filepath));
-                        std::string filenamefullA = CUnicodeUtils::StdGetUTF8(sinfo.filepath.substr(sinfo.filepath.find_last_of('\\') + 1));
-                        auto dotposA = filenamefullA.find_last_of('.');
-                        if (dotposA != std::string::npos)
+                        std::string filenamefull = CUnicodeUtils::StdGetUTF8(sinfo.filepath.substr(sinfo.filepath.find_last_of('\\') + 1));
+                        auto dotpos = filenamefull.find_last_of('.');
+                        if (dotpos != std::string::npos)
                         {
-                            std::string filename = filenamefullA.substr(0, dotposA);
+                            std::string filename = filenamefull.substr(0, dotpos);
                             replaceFmt.SetReplacePair("${filename}", filename);
-                            if (filenamefull.size() > dotposA)
+                            if (filenamefull.size() > dotpos)
                             {
-                                std::string fileext = filenamefullA.substr(dotposA + 1);
+                                std::string fileext = filenamefull.substr(dotpos + 1);
                                 replaceFmt.SetReplacePair("${fileext}", fileext);
                             }
                         }

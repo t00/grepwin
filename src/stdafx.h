@@ -44,7 +44,7 @@
 #include "Language.h"
 #include "SimpleIni.h"
 
-extern HINSTANCE g_hInst;
+extern HINSTANCE hInst;
 extern bool bPortable;
 extern CSimpleIni g_iniFile;
 
